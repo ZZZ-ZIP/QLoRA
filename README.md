@@ -33,6 +33,41 @@ The repository is organized for reproducible experiments. Raw datasets,
 extracted frames, checkpoints, model weights, cache files, and private logs are
 not included.
 
+## Task Definition
+
+This repository treats multimodal emotion recognition as an instruction
+following problem rather than as a conventional classification-head problem.
+For each utterance-level sample, the model receives:
+
+- one or more sampled video frames
+- the corresponding transcript text
+- an instruction describing the allowed emotion labels
+
+The model is trained to generate a compact JSON answer:
+
+```json
+{"emotion":"positive"}
+```
+
+This format makes the same model interface usable for base-model prompting,
+QLoRA fine-tuning, prediction parsing, and evaluation. During evaluation,
+malformed generations or labels outside the allowed set are counted as invalid
+outputs, which makes instruction-following failures visible instead of silently
+mapping them to a class.
+
+Conceptually, each training example is converted into a chat-style sequence:
+
+```text
+system: You are a multimodal emotion recognition model...
+user:   [video frames] The person in the video says: ...
+        Determine the emotion conveyed. Allowed labels: positive, negative, neutral.
+assistant: {"emotion":"<gold_label>"}
+```
+
+Only the assistant answer tokens are used as supervised targets. The prompt
+tokens are masked out in the loss, so the model is optimized to produce the
+emotion answer rather than to reproduce the full input prompt.
+
 ## Data
 
 The data comes from four filtered multimodal datasets used in the EmoBench-M
@@ -158,6 +193,90 @@ The default four-dataset experiment config is:
 configs/emotion_qlora_four_datasets.yaml
 ```
 
+## Fine-Tuning Method
+
+The fine-tuning pipeline is implemented in
+[`scripts/train_qlora_emotion.py`](scripts/train_qlora_emotion.py). It uses
+the Hugging Face `Trainer` together with PEFT LoRA adapters and 4-bit
+quantization.
+
+The main steps are:
+
+1. Load the JSONL train and validation splits.
+2. Load the Qwen3-VL processor and base image-text-to-text model.
+3. Load the base model in 4-bit mode with `bitsandbytes`.
+4. Enable gradient checkpointing to reduce memory usage.
+5. Prepare the model for k-bit training with PEFT.
+6. Freeze the vision backbone.
+7. Insert LoRA adapters into selected language-model projection modules.
+8. Train only the adapter parameters.
+9. Save the final adapter and processor files.
+
+The default QLoRA configuration uses:
+
+```yaml
+qlora:
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_compute_dtype: bfloat16
+  bnb_4bit_use_double_quant: true
+  lora_r: 20
+  lora_alpha: 40
+  lora_dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+```
+
+The default training configuration uses small per-device batches with gradient
+accumulation:
+
+```yaml
+training:
+  num_train_epochs: 3
+  learning_rate: 0.0001
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 16
+  optim: paged_adamw_8bit
+  bf16: true
+  gradient_checkpointing: true
+```
+
+This setup is designed for memory-efficient adaptation of a multimodal large
+language model on limited GPU resources.
+
+## Why This Design
+
+Qwen3-VL already has strong image-text instruction-following capability. For
+this task, the goal is not to train a new vision encoder from scratch, but to
+adapt the model's multimodal reasoning and response behavior to the emotion
+recognition label space used by EmoBench-M.
+
+QLoRA is used for three reasons:
+
+- **Memory efficiency:** 4-bit loading, NF4 quantization, double quantization,
+  and 8-bit optimizer states reduce GPU memory requirements.
+- **Parameter efficiency:** only LoRA adapter weights are trained, while most
+  pretrained parameters remain frozen.
+- **Reproducible ablations:** adapter rank, target modules, modality inputs,
+  frame counts, and cross-dataset splits can be changed through YAML configs
+  without rewriting the training loop.
+
+The vision backbone is frozen because the four filtered datasets are relatively
+small compared with the scale of the pretrained vision-language model. Freezing
+visual parameters reduces overfitting risk and keeps training focused on how
+the language model combines visual cues, transcript content, and the emotion
+instruction.
+
+The JSON output constraint is used because it gives a clear, machine-readable
+prediction target. It also allows the evaluation code to separate classification
+errors from formatting or instruction-following errors.
+
 ## Check Environment
 
 Before training, verify that the model path, Python environment, and data files
@@ -175,27 +294,9 @@ Train a QLoRA adapter on the four-dataset emotion recognition setup:
 python scripts/train_qlora_emotion.py --config configs/emotion_qlora_four_datasets.yaml
 ```
 
-The default QLoRA settings include:
-
-- 4-bit loading
-- NF4 quantization
-- bfloat16 computation
-- double quantization
-- gradient checkpointing
-- LoRA adapters on attention and MLP projection modules
-
-The default target modules are:
-
-```yaml
-target_modules:
-  - q_proj
-  - k_proj
-  - v_proj
-  - o_proj
-  - gate_proj
-  - up_proj
-  - down_proj
-```
+By default, the script trains on `data_four_datasets/train.jsonl`, evaluates on
+`data_four_datasets/val.jsonl`, and writes the final adapter to the configured
+`training.output_dir`.
 
 ## Rank Sweep
 
