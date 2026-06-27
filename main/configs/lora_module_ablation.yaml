@@ -1,0 +1,50 @@
+model_path: ../models/Qwen3-VL-2B-Instruct
+train_file: data/train.jsonl
+val_file: data/val.jsonl
+test_file: data/test.jsonl
+output_dir: results_paper_extension
+num_train_epochs: 3
+learning_rate: 0.0001
+batch_size: 1
+gradient_accumulation_steps: 16
+bf16: true
+gradient_checkpointing: true
+quantization:
+  load_in_4bit: true
+  type: nf4
+  double_quant: true
+  compute_dtype: bfloat16
+lora_rank: 20
+lora_alpha: 40
+lora_dropout: 0.05
+target_modules:
+- q_proj
+- k_proj
+- v_proj
+- o_proj
+- gate_proj
+- up_proj
+- down_proj
+input_mode: video_text
+num_frames: 4
+seed: 42
+dataset_filter: all
+split_config: {}
+module_sets:
+  attention_only:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  mlp_only:
+  - gate_proj
+  - up_proj
+  - down_proj
+  attention_mlp:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj

@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Environments and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets.*
+api_keys.*
+
+# Raw data and prepared private data
+data_four_datasets/
+raw_data/
+raw/
+frames/
+videos/
+images/
+preprocessed/
+datasets/
+data/**/*.jsonl
+data/**/*.csv
+data/**/*.tsv
+data/**/*.parquet
+data/**/*.pkl
+data/**/*.pickle
+!data/README.md
+!data/examples/
+!data/examples/**
+
+# Model files and checkpoints
+models/
+checkpoints/
+runs/
+outputs/
+results_paper_extension/
+wandb/
+mlruns/
+lightning_logs/
+tensorboard/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.gguf
+adapter_model.*
+optimizer.pt
+scheduler.pt
+rng_state.pth
+training_args.bin
+trainer_state.json
+
+# Generated results and figures
+results/**
+!results/README.md
+figures/**
+!figures/README.md
+
+# Documents generated locally
+*.pdf
+*.docx
+*.pptx
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.xdv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

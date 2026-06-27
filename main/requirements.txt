@@ -1,0 +1,15 @@
+torch
+transformers>=4.57.0
+accelerate
+peft
+bitsandbytes
+scikit-learn
+pandas
+numpy
+matplotlib
+Pillow
+PyYAML
+tqdm
+sentencepiece
+protobuf
+safetensors
